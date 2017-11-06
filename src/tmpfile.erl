@@ -23,11 +23,6 @@
 
 -define(DEFAULT_TEMP_PREFIX, "erltmp").
 
-% TODO: Add something to differentiate temp files across OS processes (pid
-% maybe? may result in conflicts on pids if pids wrap around to the same pid on
-% two processes and it's the same monotonic time and accounting for this
-% scenario is insane so pid seems good)
-
 %%====================================================================
 %% API functions
 %%====================================================================
@@ -80,24 +75,33 @@ pos_monotonic_time() ->
 -spec temp_integers() ->
 	{
 	 Counter :: pos_integer(),
-	 TimeMS :: pos_integer()
+	 TimeMS :: pos_integer(),
+	 Rand :: pos_integer()
 	}.
+%% @doc Generates and returns the three integers used by temp_name to uniquely
+%% identify temp files. It includes a positive unique integer, a positive native
+%% timestamp (the unit is defined by the operating system), and a random,
+%% positive 64-bit unsigned integer.
 temp_integers() ->
 	{
 	 erlang:unique_integer([positive]),
-	 pos_monotonic_time()
+	 pos_monotonic_time(),
+	 rand:uniform(16#FFFFFFFFFFFFFFF)
 	}.
 
--spec temp_identifier() -> string().
-temp_identifier() ->
-	{Counter, Time} = temp_integers(),
-	lists:append(
-	  integer_to_list(Counter, 36),
-	  [$.|integer_to_list(Time, 36)]
-	 ).
-
 -spec temp_name(Prefix :: string()) -> string().
+%% @doc Generates a filename with a given Prefix. If the Prefix is the empty
+%% list, then it uses the module's default temp file prefix ("erltmp").
+%%
+%% The filename is always formed as Prefix.Counter.Time.Random, where Counter,
+%% Time, and Random are base-36 integers.
 temp_name([]) ->
 	temp_name(?DEFAULT_TEMP_PREFIX);
-temp_name(Prefix) ->
-	lists:append(Prefix, [$., temp_identifier()]).
+temp_name(Prefix) when is_list(Prefix) ->
+	{Counter, Time, RandInt} = temp_integers(),
+	lists:append([
+		      Prefix,
+		      [$.|integer_to_list(Counter, 36)],
+		      [$.|integer_to_list(Time, 36)],
+		      [$.|integer_to_list(RandInt, 36)]
+		     ]).
