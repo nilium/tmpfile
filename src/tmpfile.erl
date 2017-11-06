@@ -61,7 +61,7 @@ mktemp(Type) ->
             (dir, string()) -> dir() | error_return().
 mktemp(file, Prefix) ->
 	Path = filename:join([dir(), temp_name(Prefix)]),
-	file:open(Path, [write]);
+	file:open(Path, [write, exclusive]);
 
 mktemp(dir, Prefix) ->
 	Path = filename:join([dir(), temp_name(Prefix)]),
