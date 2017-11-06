@@ -106,6 +106,7 @@ mktemp(dir, Prefix) ->
 %%====================================================================
 
 -spec pos_monotonic_time() -> pos_integer().
+%% @doc pos_monotonic_time returns a positive monotonic time.
 pos_monotonic_time() ->
 	1 + (erlang:monotonic_time() - erlang:system_info(start_time)).
 
