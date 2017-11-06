@@ -49,6 +49,8 @@ dir2([], _) ->
 dir2(Tmpdir, _) ->
 	Tmpdir.
 
+-type modes() :: [file:mode() | touch].
+
 -type file() :: {ok, string(), File :: file:io_device() | file:fd()}.
 -type dir() :: {ok, Dir :: string()}.
 -type error_return() :: {error, Reason :: any()}.
@@ -72,23 +74,29 @@ mktemp(Type) ->
 %% directory -- i.e., it already exists -- it will loop until it gets another
 %% error or successfully creates the file or directory.
 %%
-%% Files can be created by passing file, dir, or {file, Modes :: [file:mode()]}
-%% for Type.  If using {file, Modes} and Modes does not include the exclusive
-%% mode, then it is possible for mktemp to overwrite an existing file of the
-%% same name. The likelihood of this should be low, but it isn't impossible.
+%% Files can be created by passing file, dir, or `{file, Modes}' for Type.
+%% If using `{file, Modes}', the `exclusive' mode is always added to the Modes
+%% list.
 %%
-%% Type file is synonymous with {file, [write, exclusive]}.
+%% Type file is synonymous with `{file, [write, exclusive]}'.
 mktemp(file, Prefix) ->
-	mktemp({file, [write, exclusive]}, Prefix);
+	mktemp({file, [write]}, Prefix);
 
 mktemp({file, Modes}, Prefix) when is_list(Modes) ->
 	Path = filename:join([dir(), temp_name(Prefix)]),
-	case file:open(Path, [write, exclusive]) of
+	Touch = should_close(Modes),
+	case file:open(Path, [exclusive | file_modes(Modes)]) of
 		% File already exists -- try opening a file with a different
 		% name.
-		{error, eexist} -> mktemp(file, Prefix);
-		{ok, File} -> {ok, Path, File};
-		{error, _} = Error -> Error
+		{error, eexist} ->
+			mktemp(file, Prefix);
+		{ok, File} when Touch =:= false ->
+			{ok, Path, File};
+		{ok, File} when Touch =:= true ->
+			ok = file:close(File),
+			{ok, Path};
+		{error, _} = Error ->
+			Error
 	end;
 
 mktemp(dir, Prefix) ->
@@ -104,6 +112,26 @@ mktemp(dir, Prefix) ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
+
+-spec file_modes(Modes :: modes()) -> [file:mode()].
+file_modes(Modes) ->
+	file_modes(Modes, []).
+
+-spec file_modes(Modes :: modes(), Acc :: [file:mode()]) -> [file:mode()].
+file_modes([], Acc) ->
+	Acc;
+file_modes([touch|Tail], Acc) ->
+	file_modes(Tail, Acc);
+file_modes([H|Tail], Acc) ->
+	file_modes(Tail, [H|Acc]).
+
+-spec should_close(modes()) -> boolean().
+should_close([]) ->
+	false;
+should_close([touch|_]) ->
+	true;
+should_close([_|Tail]) ->
+	should_close(Tail).
 
 -spec pos_monotonic_time() -> pos_integer().
 %% @doc pos_monotonic_time returns a positive monotonic time.
