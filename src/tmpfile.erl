@@ -18,7 +18,6 @@
 -export([mktemp/0,
 	 mktemp/1,
 	 mktemp/2,
-	 temp_identifier/0,
 	 dir/0
 	]).
 
