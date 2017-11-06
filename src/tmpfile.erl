@@ -36,30 +36,54 @@ dir() ->
 	% the base directory.
 	"/tmp".
 
--type file() :: {ok, File :: file:io_device()}.
+-type file() :: {ok, string(), File :: file:io_device() | file:fd()}.
 -type dir() :: {ok, Dir :: string()}.
 -type error_return() :: {error, Reason :: any()}.
 
 -spec mktemp() -> file() | error_return().
-%% @doc Calls mktemp(file, ?DEFAULT_TEMP_PREFIX).
+%% @doc Calls mktemp(file, []).
 mktemp() ->
-	mktemp(file, ?DEFAULT_TEMP_PREFIX).
+	mktemp(file, []).
 
 -spec mktemp(file) -> file() | error_return();
-            (dir) -> dir() | error_return().
-%% @doc Calls mktemp(Type, ?DEFAULT_TEMP_PREFIX).
+	    (dir) -> dir() | error_return().
+%% @doc Calls mktemp(Type, []).
 mktemp(Type) ->
-	mktemp(Type, ?DEFAULT_TEMP_PREFIX).
+	mktemp(Type, []).
 
--spec mktemp(file, string()) -> file() | error_return();
-            (dir, string()) -> dir() | error_return().
+-spec mktemp(Type :: file, string()) -> file() | error_return();
+	    (Type :: {file, [file:mode()]}, string()) -> file() | error_return();
+	    (Type :: dir, string()) -> dir() | error_return().
+%% @doc Allocates a new temporary file or directory with the given Prefix
+%% (followed by a period). If a conflict is encountered in creating the file or
+%% directory -- i.e., it already exists -- it will loop until it gets another
+%% error or successfully creates the file or directory.
+%%
+%% Files can be created by passing file, dir, or {file, Modes :: [file:mode()]}
+%% for Type.  If using {file, Modes} and Modes does not include the exclusive
+%% mode, then it is possible for mktemp to overwrite an existing file of the
+%% same name. The likelihood of this should be low, but it isn't impossible.
+%%
+%% Type file is synonymous with {file, [write, exclusive]}.
 mktemp(file, Prefix) ->
+	mktemp({file, [write, exclusive]}, Prefix);
+
+mktemp({file, Modes}, Prefix) when is_list(Modes) ->
 	Path = filename:join([dir(), temp_name(Prefix)]),
-	file:open(Path, [write, exclusive]);
+	case file:open(Path, [write, exclusive]) of
+		% File already exists -- try opening a file with a different
+		% name.
+		{error, eexist} -> mktemp(file, Prefix);
+		{ok, File} -> {ok, Path, File};
+		{error, _} = Error -> Error
+	end;
 
 mktemp(dir, Prefix) ->
 	Path = filename:join([dir(), temp_name(Prefix)]),
 	case file:make_dir(Path) of
+		% Dir already exists -- try a new name.
+		{error, eexist} -> mktemp(dir, Prefix);
+		% Return either a path or an error
 		ok -> {ok, Path};
 		{error, _} = Err -> Err
 	end.
