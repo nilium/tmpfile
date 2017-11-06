@@ -22,19 +22,32 @@
 	]).
 
 -define(DEFAULT_TEMP_PREFIX, "erltmp").
+-define(DEFAULT_TEMP_DIR_UNIX, "/tmp").
 
 %%====================================================================
 %% API functions
 %%====================================================================
 
--spec dir() -> string().
+-spec dir() -> string() | no_return().
 %% @doc Returns the directory that temporary files and directories are created
-%% under.
+%% under. If called from an unsupported operating system type and TMPDIR is not
+%% set, dir/0 throws an `unsupported' error.
 dir() ->
-	% TODO: Actually determine where to put tempfiles in a better manner.
-	% Probably check the os family and then run mktemp or something to get
-	% the base directory.
-	"/tmp".
+	{Family, _} = os:type(),
+	dir2(os:getenv("TMPDIR"), Family).
+
+-spec dir2(Tmpdir :: false | string(), Family :: atom()) -> string() | no_return().
+%% @doc Returns the directory that temporary files and directories are created
+%% under based on the `TMPDIR' environment variable and OS family (as returned
+%% by `os:type/0').
+dir2(false, Family) ->
+	dir2([], Family);
+dir2([], unix) ->
+	"/tmp";
+dir2([], _) ->
+	error(unsupported);
+dir2(Tmpdir, _) ->
+	Tmpdir.
 
 -type file() :: {ok, string(), File :: file:io_device() | file:fd()}.
 -type dir() :: {ok, Dir :: string()}.
