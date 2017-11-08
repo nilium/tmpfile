@@ -12,6 +12,13 @@
 % See the License for the specific language governing permissions and
 % limitations under the License.
 
+%% @doc tmpfile is a simple module for handling temporary files and directories
+%% in a mostly-Unix-y way. It is not intended as a cross-platform module, so it
+%% will only really work on Unix family operating systems (Linux, BSDs, Solaris,
+%% etc.).
+%%
+%% The API surface is primarily `mktemp/0', `mktemp/1', and `mktemp/2' --
+%% `mktemp/0' and `mktemp/1' both call `mktemp/2'.
 -module(tmpfile).
 
 %% API exports
@@ -51,24 +58,28 @@ dir2(Tmpdir, _) ->
 
 -type modes() :: [file:mode() | touch].
 
--type file() :: {ok, string(), File :: file:io_device() | file:fd()}.
+-type file() :: {ok, Path :: string(), File :: file:io_device() | file:fd()}
+	| {ok, Path :: string()}.
 -type dir() :: {ok, Dir :: string()}.
 -type error_return() :: {error, Reason :: any()}.
 
--spec mktemp() -> file() | error_return().
-%% @doc Calls mktemp(file, []).
-mktemp() ->
-	mktemp(file, []).
+-define(DEFAULT_FILE_TYPE, {file, [write]}).
 
--spec mktemp(file) -> file() | error_return();
-	    (dir) -> dir() | error_return().
-%% @doc Calls mktemp(Type, []).
+-spec mktemp() -> file() | error_return().
+%% @doc Calls `mktemp({file, [write]}, [])'.
+mktemp() ->
+	mktemp(?DEFAULT_FILE_TYPE, []).
+
+-spec mktemp(Type :: file) -> file() | error_return();
+	    (Type :: {file, modes()}) -> file() | error_return();
+	    (Type :: dir) -> dir() | error_return().
+%% @doc Calls `mktemp(Type, [])'.
 mktemp(Type) ->
 	mktemp(Type, []).
 
--spec mktemp(Type :: file, string()) -> file() | error_return();
-	    (Type :: {file, [file:mode()]}, string()) -> file() | error_return();
-	    (Type :: dir, string()) -> dir() | error_return().
+-spec mktemp(Type :: file, Prefix :: string()) -> file() | error_return();
+	    (Type :: {file, modes()}, Prefix :: string()) -> file() | error_return();
+	    (Type :: dir, Prefix :: string()) -> dir() | error_return().
 %% @doc Allocates a new temporary file or directory with the given Prefix
 %% (followed by a period). If a conflict is encountered in creating the file or
 %% directory -- i.e., it already exists -- it will loop until it gets another
@@ -76,11 +87,19 @@ mktemp(Type) ->
 %%
 %% Files can be created by passing file, dir, or `{file, Modes}' for Type.
 %% If using `{file, Modes}', the `exclusive' mode is always added to the Modes
-%% list.
+%% list. If the file's Modes contains `touch', the file is opened and then
+%% closed immediately and only `{ok, Path}' are returned.
 %%
-%% Type file is synonymous with `{file, [write, exclusive]}'.
+%% Type `file' is synonymous with `{file, [write, exclusive]}'.
+%%
+%% If, somehow, a filename (or directory name) conflicts with an existing file
+%% or directory, mktemp will retry, generating a new name and attempting again
+%% to create a file. This is only done for eexist file errors -- there is no
+%% other handling around errors creating files and directories.
+%%
+%% The filename is always formatted as `Prefix.Counter.Time.Random'.
 mktemp(file, Prefix) ->
-	mktemp({file, [write]}, Prefix);
+	mktemp(?DEFAULT_FILE_TYPE, Prefix);
 
 mktemp({file, Modes}, Prefix) when is_list(Modes) ->
 	Path = filename:join([dir(), temp_name(Prefix)]),
