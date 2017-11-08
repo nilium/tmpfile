@@ -28,6 +28,13 @@
 	 dir/0
 	]).
 
+-export_type([
+	      file/0,
+	      dir/0,
+	      error/0,
+	      modes/0
+	     ]).
+
 -define(DEFAULT_TEMP_PREFIX, "erltmp").
 -define(DEFAULT_TEMP_DIR_UNIX, "/tmp").
 
@@ -37,8 +44,8 @@
 
 -spec dir() -> string() | no_return().
 %% @doc Returns the directory that temporary files and directories are created
-%% under. If called from an unsupported operating system type and TMPDIR is not
-%% set, dir/0 throws an `unsupported' error.
+%% under. If called from an unsupported operating system type and `TMPDIR' is
+%% not set, dir/0 throws an `unsupported' error.
 dir() ->
 	{Family, _} = os:type(),
 	dir2(os:getenv("TMPDIR"), Family).
@@ -57,29 +64,37 @@ dir2(Tmpdir, _) ->
 	Tmpdir.
 
 -type modes() :: [file:mode() | touch].
+%% A set of file modes.
 
 -type file() :: {ok, Path :: string(), File :: file:io_device() | file:fd()}
 	| {ok, Path :: string()}.
+%% A file result. A file result can be either a 3-tuple of ok, the Path string,
+%% and a File (either a file descriptor or a pid); or a 2-tuple of ok and the
+%% Path string.
+
 -type dir() :: {ok, Dir :: string()}.
--type error_return() :: {error, Reason :: any()}.
+%% A directory result.
+
+-type error() :: {error, Reason :: any()}.
+%% An error result.
 
 -define(DEFAULT_FILE_TYPE, {file, [write]}).
 
--spec mktemp() -> file() | error_return().
+-spec mktemp() -> file() | error().
 %% @doc Calls `mktemp({file, [write]}, [])'.
 mktemp() ->
 	mktemp(?DEFAULT_FILE_TYPE, []).
 
--spec mktemp(Type :: file) -> file() | error_return();
-	    (Type :: {file, modes()}) -> file() | error_return();
-	    (Type :: dir) -> dir() | error_return().
+-spec mktemp(Type :: file) -> file() | error();
+	    (Type :: {file, modes()}) -> file() | error();
+	    (Type :: dir) -> dir() | error().
 %% @doc Calls `mktemp(Type, [])'.
 mktemp(Type) ->
 	mktemp(Type, []).
 
--spec mktemp(Type :: file, Prefix :: string()) -> file() | error_return();
-	    (Type :: {file, modes()}, Prefix :: string()) -> file() | error_return();
-	    (Type :: dir, Prefix :: string()) -> dir() | error_return().
+-spec mktemp(Type :: file, Prefix :: string()) -> file() | error();
+	    (Type :: {file, modes()}, Prefix :: string()) -> file() | error();
+	    (Type :: dir, Prefix :: string()) -> dir() | error().
 %% @doc Allocates a new temporary file or directory with the given Prefix
 %% (followed by a period). If a conflict is encountered in creating the file or
 %% directory -- i.e., it already exists -- it will loop until it gets another
@@ -153,8 +168,8 @@ should_close([_|Tail]) ->
 	should_close(Tail).
 
 -spec pos_monotonic_time() -> pos_integer().
-%% @doc pos_monotonic_time returns a positive monotonic time.
 pos_monotonic_time() ->
+	%% Returns a positive monotonic time.
 	1 + (erlang:monotonic_time() - erlang:system_info(start_time)).
 
 -spec temp_integers() ->
@@ -175,14 +190,15 @@ temp_integers() ->
 	}.
 
 -spec temp_name(Prefix :: string()) -> string().
-%% @doc Generates a filename with a given Prefix. If the Prefix is the empty
-%% list, then it uses the module's default temp file prefix ("erltmp").
-%%
-%% The filename is always formed as Prefix.Counter.Time.Random, where Counter,
-%% Time, and Random are base-36 integers.
 temp_name([]) ->
+	%% Calls temp_name("erltmp").
 	temp_name(?DEFAULT_TEMP_PREFIX);
 temp_name(Prefix) when is_list(Prefix) ->
+	%% Generates a filename with a given Prefix. If the Prefix is the empty
+	%% list, then it uses the module's default temp file prefix ("erltmp").
+	%%
+	%% The filename is always formed as Prefix.Counter.Time.Random, where
+	%% Counter, Time, and Random are base-36 integers.
 	{Counter, Time, RandInt} = temp_integers(),
 	lists:append([
 		      Prefix,
